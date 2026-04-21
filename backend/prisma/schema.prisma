@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum EquipmentStatus {
+  FUNCTIONAL
+  MISSING
+  REPAIR
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RETURNED
+}
+
+model User {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(STUDENT)
+  requests  Request[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Lab {
+  id         String      @id @default(uuid()) @db.Uuid
+  name       String      @unique
+  room       String
+  supervisor String
+  equipment  Equipment[]
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  @@map("labs")
+}
+
+model Equipment {
+  id             String    @id @default(uuid()) @db.Uuid
+  labId          String    @db.Uuid @map("lab_id")
+  name           String
+  description    String?
+  category       String
+  totalUnits     Int       @map("total_units")
+  availableUnits Int       @map("available_units")
+  status         EquipmentStatus @default(FUNCTIONAL)
+  conditionNote  String?   @map("condition_note")
+  requests       Request[]
+  lab            Lab       @relation(fields: [labId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([labId, name])
+  @@index([labId])
+
+  @@map("equipment")
+}
+
+model Request {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid @map("user_id")
+  equipmentId String    @db.Uuid @map("equipment_id")
+  requestedAt DateTime  @default(now()) @map("requested_at")
+  status      RequestStatus @default(PENDING)
+  dueDate     DateTime  @map("due_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([equipmentId])
+  @@index([status])
+  @@map("requests")
+}
