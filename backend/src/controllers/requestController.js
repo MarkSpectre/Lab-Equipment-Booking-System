@@ -1,5 +1,9 @@
 import * as requestService from "../services/requestService.js";
-import { adminAttributes, notify, studentAttributes } from "../services/snsService.js";
+import {
+  adminAttributes,
+  publishNotification,
+  sendApprovalNotification,
+} from "../services/snsService.js";
 
 export async function submitRequest(req, res, next) {
   try {
@@ -10,14 +14,23 @@ export async function submitRequest(req, res, next) {
       dueDate: req.body.dueDate,
     });
 
-    const snsResult = await notify(
-      `Student ${req.user.name || "A student"} has requested "${request.equipment.name}". Please review in the Admin Dashboard.`,
-      `New Lab Request: ${request.equipment.name}`,
-      adminAttributes()
-    );
+    try {
+      const snsResult = await publishNotification(
+        `Student ${req.user.name || "A student"} has requested "${request.equipment.name}". Please review in the Admin Dashboard.`,
+        `New Lab Request: ${request.equipment.name}`,
+        adminAttributes()
+      );
 
-    if (snsResult && !snsResult.success) {
-      return res.status(201).json({ ...request, warning: "Request saved, but email notification failed" });
+      if (snsResult && !snsResult.success) {
+        return res
+          .status(201)
+          .json({ ...request, warning: "Request saved, but email notification failed" });
+      }
+    } catch (snsError) {
+      console.error("[requestController.submitRequest] SNS publish failed:", snsError?.message || snsError);
+      return res
+        .status(201)
+        .json({ ...request, warning: "Request saved, but email notification failed" });
     }
 
     res.status(201).json(request);
@@ -43,27 +56,45 @@ export async function patchRequestStatus(req, res, next) {
 
     const nextStatus = String(status || "").toUpperCase();
 
-    if (nextStatus === "APPROVED" && updated?.user && updated?.equipment) {
-      const notificationEmail = updated.user.notificationEmail?.trim();
+    if (nextStatus === "APPROVED") {
+      const approvedRequest = await requestService.getRequestWithRelations(requestId);
 
-      if (!notificationEmail) {
+      if (!approvedRequest?.user || !approvedRequest?.equipment) {
         console.warn(
-          `[requestController.patchRequestStatus] Approved request ${updated.id} has no notificationEmail; skipping SNS publish.`
+          `[requestController.patchRequestStatus] Request ${requestId} missing user/equipment relation after approval update.`
+        );
+        return res.json({ ...updated, warning: "Status updated, but email notification data is incomplete" });
+      }
+
+      const studentEmail =
+        approvedRequest.user.notificationEmail?.trim() ||
+        approvedRequest.user.email?.trim();
+
+      if (!studentEmail) {
+        console.warn(
+          `[requestController.patchRequestStatus] Approved request ${approvedRequest.id} has no notificationEmail or login email; skipping SNS publish.`
         );
         return res.json({
           ...updated,
           warning:
-            "Status updated, but no notification email is configured for this student",
+            "Status updated, but no student email is configured for notifications",
         });
       }
 
-      const snsResult = await notify(
-        `Your request for "${updated.equipment.name}" is approved. Pick it up from the lab.`,
-        "Equipment Approved!",
-        studentAttributes(notificationEmail)
-      );
+      try {
+        const snsResult = await sendApprovalNotification(
+          approvedRequest.user,
+          approvedRequest.equipment.name
+        );
 
-      if (snsResult && !snsResult.success) {
+        if (snsResult && !snsResult.success) {
+          return res.json({ ...updated, warning: "Status updated, but email notification failed" });
+        }
+      } catch (snsError) {
+        console.error(
+          `[requestController.patchRequestStatus] SNS publish failed for request ${approvedRequest.id}:`,
+          snsError?.message || snsError
+        );
         return res.json({ ...updated, warning: "Status updated, but email notification failed" });
       }
     }
@@ -73,3 +104,6 @@ export async function patchRequestStatus(req, res, next) {
     next(error);
   }
 }
+
+// Backward-compatible naming alias
+export const updateStatus = patchRequestStatus;

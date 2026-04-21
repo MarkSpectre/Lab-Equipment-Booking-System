@@ -9,4 +9,7 @@ router.get("/me", getMe);
 // PATCH /api/users/me/notification-email → save + subscribe notification email
 router.patch("/me/notification-email", setNotificationEmail);
 
+// PATCH /api/users/profile → profile update alias used by frontend settings page
+router.patch("/profile", setNotificationEmail);
+
 export default router;

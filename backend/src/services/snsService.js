@@ -149,7 +149,7 @@ export async function subscribeUser(email, role) {
   }
 }
 
-// ─── 2. notify ─────────────────────────────────────────────────────────────
+// ─── 2. publishNotification ────────────────────────────────────────────────
 /**
  * Publishes a message to the SNS topic with MessageAttributes for smart routing.
  *
@@ -166,19 +166,38 @@ export async function subscribeUser(email, role) {
  * @param {Record<string, { DataType: string, StringValue: string }>} attributes
  * @returns {Promise<{success: boolean, messageId?: string, error?: string}>} SNS Result
  */
-export async function notify(message, subject, attributes = {}) {
-  if (!guardTopicArn("notify")) {
+function normalizeMessageAttributes(attributes = {}) {
+  const normalized = {};
+
+  if (attributes.recipient_role) {
+    normalized.recipient_role = attributes.recipient_role;
+  }
+
+  if (attributes.recipient_email) {
+    normalized.recipient_email = attributes.recipient_email;
+  }
+
+  return normalized;
+}
+
+export async function publishNotification(message, subject, attributes = {}) {
+  if (!guardTopicArn("publishNotification")) {
     return { success: false, error: "AWS_SNS_TOPIC_ARN not set" };
   }
 
   try {
+    const messageAttributes = normalizeMessageAttributes(attributes);
+
     const params = {
       TopicArn: env.awsSnsTopicArn,
       Subject: subject.slice(0, 100), // SNS hard limit
       Message: message,
-      MessageAttributes: attributes,
+      MessageAttributes: messageAttributes,
     };
 
+    console.log(
+      `PUBLISHING TO SNS: ${params.Subject} -> ${JSON.stringify(messageAttributes)}`
+    );
     console.log("SNS Payload:", JSON.stringify(params, null, 2));
 
     const result = await snsClient.send(new PublishCommand(params));
@@ -190,6 +209,9 @@ export async function notify(message, subject, attributes = {}) {
     return { success: false, error: error.message };
   }
 }
+
+// Backward-compatible alias for existing call sites
+export const notify = publishNotification;
 
 // ─── Pre-built attribute helpers ───────────────────────────────────────────
 /** Returns MessageAttributes that route to ALL admin subscribers */
@@ -204,4 +226,30 @@ export function studentAttributes(email) {
   return {
     recipient_email: { DataType: "String", StringValue: email },
   };
+}
+
+/**
+ * Sends approval notifications to the dynamic student recipient.
+ * Priority: notificationEmail, then fallback to login email.
+ */
+export async function sendApprovalNotification(user, equipmentName) {
+  const studentEmail =
+    user?.notificationEmail?.trim() ||
+    user?.email?.trim();
+
+  if (!studentEmail) {
+    console.warn("[snsService.sendApprovalNotification] User has no notificationEmail or email; skipping publish.");
+    return {
+      success: false,
+      error: "No valid recipient email",
+    };
+  }
+
+  const studentName = user?.name?.trim() || "Student";
+
+  return publishNotification(
+    `Hi ${studentName}, your request for ${equipmentName} has been approved. Please collect it from the lab.`,
+    `Lab Equipment Approved: ${equipmentName}`,
+    studentAttributes(studentEmail)
+  );
 }

@@ -104,3 +104,7 @@ export async function updateRequestStatus(requestId, status) {
 
   return updated;
 }
+
+export async function getRequestWithRelations(requestId) {
+  return requestModel.findById(requestId);
+}

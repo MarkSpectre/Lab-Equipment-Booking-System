@@ -48,7 +48,7 @@ function NotificationSettingsPage() {
 
     try {
       setIsSaving(true);
-      const { data } = await api.patch("/users/me/notification-email", {
+      const { data } = await api.patch("/users/profile", {
         notificationEmail: trimmed,
       });
 
