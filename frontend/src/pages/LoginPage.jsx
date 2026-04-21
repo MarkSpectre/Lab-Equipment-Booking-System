@@ -22,7 +22,12 @@ function LoginPage() {
       const response = await api.post("/auth/login", { email, password });
 
       saveAuth(response.data);
-      toast.success("Welcome back");
+      
+      if (response.data.warning) {
+        toast.warning("Welcome (Email alert pending)");
+      } else {
+        toast.success("Welcome back");
+      }
 
       // Normalise to uppercase so "admin", "ADMIN", "Admin" all work
       const role = String(response?.data?.user?.role || "").toUpperCase();

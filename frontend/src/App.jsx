@@ -9,6 +9,7 @@ import AdminLabsPage from "./pages/AdminLabsPage";
 import LabInventoryPage from "./pages/LabInventoryPage";
 import LabsPage from "./pages/LabsPage";
 import LoginPage from "./pages/LoginPage";
+import NotificationSettingsPage from "./pages/NotificationSettingsPage";
 import SignupPage from "./pages/SignupPage";
 import StockAuditPage from "./pages/StockAuditPage";
 import StudentDashboardPage from "./pages/StudentDashboardPage";
@@ -40,9 +41,10 @@ function App() {
 
           {/* ── Student-only routes ─────────────────────────── */}
           <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
-            <Route path="/requests"      element={<StudentDashboardPage />} />
-            <Route path="/labs"          element={<LabsPage />} />
-            <Route path="/labs/:labId"   element={<LabInventoryPage />} />
+            <Route path="/requests"                  element={<StudentDashboardPage />} />
+            <Route path="/labs"                      element={<LabsPage />} />
+            <Route path="/labs/:labId"               element={<LabInventoryPage />} />
+            <Route path="/settings/notifications"    element={<NotificationSettingsPage />} />
           </Route>
 
           {/* ── Admin-only routes ───────────────────────────── */}

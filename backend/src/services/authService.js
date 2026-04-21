@@ -2,7 +2,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { userModel } from "../models/userModel.js";
-
 function signToken(user) {
   return jwt.sign(
     {
@@ -33,6 +32,7 @@ export async function signup({ name, email, password, role = "student" }) {
     password: passwordHash,
     role: normalizedRole,
   });
+
 
   const token = signToken(user);
   return {

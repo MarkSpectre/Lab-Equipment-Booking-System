@@ -46,8 +46,9 @@ function Navbar({ theme, setTheme }) {
         {/* Role-based nav links — hidden on auth pages */}
         {!isAuthPage && role === "STUDENT" && (
           <>
-            <NavLink to="/labs"     label="Labs"        current={location.pathname} />
-            <NavLink to="/requests" label="My Requests" current={location.pathname} />
+            <NavLink to="/labs"                   label="Labs"          current={location.pathname} />
+            <NavLink to="/requests"               label="My Requests"   current={location.pathname} />
+            <NavLink to="/settings/notifications" label="Notifications" current={location.pathname} />
           </>
         )}
 

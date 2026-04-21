@@ -26,14 +26,15 @@ enum RequestStatus {
 }
 
 model User {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String
-  email     String    @unique
-  password  String
-  role      Role      @default(STUDENT)
-  requests  Request[]
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String
+  email             String    @unique
+  password          String
+  role              Role      @default(STUDENT)
+  notificationEmail String?   @map("notification_email") // personal/Gmail for SNS alerts
+  requests          Request[]
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@map("users")
 }

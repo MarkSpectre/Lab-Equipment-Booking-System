@@ -28,6 +28,10 @@ function SignupPage() {
         } else {
           navigate("/labs");
         }
+        
+        if (response.data.warning) {
+          return "Account created (Email alert pending)";
+        }
         return "Account ready";
       },
       error: (error) => error.response?.data?.message || "Signup failed",

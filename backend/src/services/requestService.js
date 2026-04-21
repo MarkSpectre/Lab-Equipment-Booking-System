@@ -1,17 +1,18 @@
 import { prisma } from "../config/prisma.js";
 import { requestModel } from "../models/requestModel.js";
-import { sendRequestApprovedNotification } from "./notificationService.js";
-
-export async function createBorrowRequest({ userId, equipmentId, dueDate }) {
+// ─── Create a new borrow request ──────────────────────────────────────────
+export async function createBorrowRequest({ userId, equipmentId, dueDate, studentName }) {
   if (!equipmentId) {
     const error = new Error("equipmentId is required.");
     error.statusCode = 400;
     throw error;
   }
 
-  const resolvedDueDate = dueDate ? new Date(dueDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const resolvedDueDate = dueDate
+    ? new Date(dueDate)
+    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  return prisma.$transaction(async (tx) => {
+  const request = await prisma.$transaction(async (tx) => {
     const equipment = await tx.equipment.findUnique({ where: { id: equipmentId } });
 
     if (!equipment) {
@@ -32,7 +33,7 @@ export async function createBorrowRequest({ userId, equipmentId, dueDate }) {
       throw error;
     }
 
-    const request = await tx.request.create({
+    const created = await tx.request.create({
       data: {
         userId,
         equipmentId,
@@ -40,11 +41,7 @@ export async function createBorrowRequest({ userId, equipmentId, dueDate }) {
         status: "PENDING",
       },
       include: {
-        equipment: {
-          include: {
-            lab: true,
-          },
-        },
+        equipment: { include: { lab: true } },
       },
     });
 
@@ -53,18 +50,21 @@ export async function createBorrowRequest({ userId, equipmentId, dueDate }) {
       data: { availableUnits: { decrement: 1 } },
     });
 
-    return request;
+    return created;
   });
+
+  return request;
 }
 
+// ─── List requests (admin sees all, student sees own) ─────────────────────
 export async function listRequests(user) {
   if (String(user.role).toUpperCase() === "ADMIN") {
     return requestModel.findAll();
   }
-
   return requestModel.findByUser(user.id);
 }
 
+// ─── Update request status ────────────────────────────────────────────────
 export async function updateRequestStatus(requestId, status) {
   const nextStatus = String(status || "").toUpperCase();
 
@@ -74,6 +74,7 @@ export async function updateRequestStatus(requestId, status) {
     throw error;
   }
 
+  // Fetch full request with user (for notificationEmail) and equipment
   const request = await requestModel.findById(requestId);
 
   if (!request) {
@@ -82,17 +83,10 @@ export async function updateRequestStatus(requestId, status) {
     throw error;
   }
 
+  // ── DB update (always happens first; SNS is a side-effect) ───────────────
   const updated = await requestModel.updateById(requestId, { status: nextStatus });
 
-  if (nextStatus === "APPROVED") {
-    await sendRequestApprovedNotification({
-      studentName: request.user.name,
-      studentEmail: request.user.email,
-      equipmentName: request.equipment.name,
-      dueDate: request.dueDate || new Date(),
-    });
-  }
-
+  // ── Restore stock on REJECTED (only if still PENDING) ────────────────────
   if (nextStatus === "REJECTED" && request.status === "PENDING") {
     await prisma.equipment.update({
       where: { id: request.equipmentId },
@@ -100,6 +94,7 @@ export async function updateRequestStatus(requestId, status) {
     });
   }
 
+  // ── Restore stock on RETURNED ─────────────────────────────────────────────
   if (nextStatus === "RETURNED") {
     await prisma.equipment.update({
       where: { id: request.equipmentId },

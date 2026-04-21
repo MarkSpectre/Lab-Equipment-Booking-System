@@ -1,9 +1,21 @@
 import * as authService from "../services/authService.js";
+import { subscribeUser } from "../services/snsService.js";
 
 export async function signup(req, res, next) {
   try {
     const { name, email, password, role } = req.body;
     const result = await authService.signup({ name, email, password, role });
+
+    if (result.user.role === "STUDENT") {
+      const snsResult = await subscribeUser(email, "STUDENT");
+      if (snsResult && !snsResult.success) {
+        return res.status(201).json({
+          ...result,
+          warning: "Account created, but email notification failed",
+        });
+      }
+    }
+
     res.status(201).json(result);
   } catch (error) {
     next(error);

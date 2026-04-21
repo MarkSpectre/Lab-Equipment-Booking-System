@@ -10,6 +10,15 @@ import authRoutes from "./routes/authRoutes.js";
 import equipmentRoutes from "./routes/equipmentRoutes.js";
 import labRoutes from "./routes/labRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+
+process.on("uncaughtException", (error) => {
+  console.error("🔥 Uncaught Exception:", error);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Rejection at:", promise, "reason:", reason);
+});
 
 const app = express();
 
@@ -28,8 +37,9 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/admin", requireAuth, adminRoutes);
-app.use("/api/labs", requireAuth, labRoutes);
+app.use("/api/users",    requireAuth, userRoutes);
+app.use("/api/admin",   requireAuth, adminRoutes);
+app.use("/api/labs",    requireAuth, labRoutes);
 app.use("/api/equipment", requireAuth, equipmentRoutes);
 app.use("/api/requests", requireAuth, requestRoutes);
 app.use(errorHandler);
