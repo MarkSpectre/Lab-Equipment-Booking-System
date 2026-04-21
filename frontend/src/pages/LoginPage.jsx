@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertCircle, Beaker } from "lucide-react";
-import axios from "axios";
+import api from "../api/axios"; // centralised, env-aware instance
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { saveAuth } from "../lib/auth";
@@ -18,18 +18,21 @@ function LoginPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await axios.post("/api/auth/login", { email, password });
+      // api.post uses the centralised baseURL (VITE_API_URL or /api)
+      const response = await api.post("/auth/login", { email, password });
 
       saveAuth(response.data);
       toast.success("Welcome back");
 
-      const role = String(response?.data?.user?.role || "").toLowerCase();
+      // Normalise to uppercase so "admin", "ADMIN", "Admin" all work
+      const role = String(response?.data?.user?.role || "").toUpperCase();
 
-      if (role === "admin") {
-        navigate("/admin/labs", { replace: true });
-      } else {
-        navigate("/labs", { replace: true });
-      }
+      const ROLE_REDIRECT = {
+        ADMIN:   "/admin/labs",
+        STUDENT: "/labs",
+      };
+
+      navigate(ROLE_REDIRECT[role] ?? "/labs", { replace: true });
     } catch (error) {
       const message = error.response?.data?.message || "Login failed";
 
