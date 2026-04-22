@@ -1,11 +1,7 @@
 import * as requestService from "../services/requestService.js";
-import {
-  adminAttributes,
-  publishNotification,
-  sendApprovalNotification,
-} from "../services/snsService.js";
+import { notifyStudent, notifyAdmin } from "../services/snsService.js";
 
-export async function submitRequest(req, res, next) {
+export async function createRequest(req, res, next) {
   try {
     const request = await requestService.createBorrowRequest({
       userId: req.user.id,
@@ -15,11 +11,7 @@ export async function submitRequest(req, res, next) {
     });
 
     try {
-      const snsResult = await publishNotification(
-        `Student ${req.user.name || "A student"} has requested "${request.equipment.name}". Please review in the Admin Dashboard.`,
-        `New Lab Request: ${request.equipment.name}`,
-        adminAttributes()
-      );
+      const snsResult = await notifyAdmin(req.user.name || "A student", req.user.email, request.equipment.name);
 
       if (snsResult && !snsResult.success) {
         return res
@@ -48,7 +40,7 @@ export async function getRequests(req, res, next) {
   }
 }
 
-export async function patchRequestStatus(req, res, next) {
+export async function updateStatus(req, res, next) {
   try {
     const requestId = req.params.id;
     const { status } = req.body;
@@ -56,23 +48,23 @@ export async function patchRequestStatus(req, res, next) {
 
     const nextStatus = String(status || "").toUpperCase();
 
-    if (nextStatus === "APPROVED") {
-      const approvedRequest = await requestService.getRequestWithRelations(requestId);
+    if (nextStatus === "APPROVED" || nextStatus === "REJECTED") {
+      const fullRequest = await requestService.getRequestWithRelations(requestId);
 
-      if (!approvedRequest?.user || !approvedRequest?.equipment) {
+      if (!fullRequest?.user || !fullRequest?.equipment) {
         console.warn(
-          `[requestController.patchRequestStatus] Request ${requestId} missing user/equipment relation after approval update.`
+          `[requestController.updateStatus] Request ${requestId} missing user/equipment relation after status update.`
         );
         return res.json({ ...updated, warning: "Status updated, but email notification data is incomplete" });
       }
 
       const studentEmail =
-        approvedRequest.user.notificationEmail?.trim() ||
-        approvedRequest.user.email?.trim();
+        fullRequest.user.notificationEmail?.trim() ||
+        fullRequest.user.email?.trim();
 
       if (!studentEmail) {
         console.warn(
-          `[requestController.patchRequestStatus] Approved request ${approvedRequest.id} has no notificationEmail or login email; skipping SNS publish.`
+          `[requestController.updateStatus] Request ${fullRequest.id} has no notificationEmail or login email; skipping SNS publish.`
         );
         return res.json({
           ...updated,
@@ -81,10 +73,14 @@ export async function patchRequestStatus(req, res, next) {
         });
       }
 
+      const friendlyStatus = nextStatus === "APPROVED" ? "Approved" : "Rejected";
+
       try {
-        const snsResult = await sendApprovalNotification(
-          approvedRequest.user,
-          approvedRequest.equipment.name
+        const snsResult = await notifyStudent(
+          studentEmail,
+          fullRequest.user?.name || "Student",
+          fullRequest.equipment.name,
+          friendlyStatus
         );
 
         if (snsResult && !snsResult.success) {
@@ -92,7 +88,7 @@ export async function patchRequestStatus(req, res, next) {
         }
       } catch (snsError) {
         console.error(
-          `[requestController.patchRequestStatus] SNS publish failed for request ${approvedRequest.id}:`,
+          `[requestController.updateStatus] SNS publish failed for request ${fullRequest.id}:`,
           snsError?.message || snsError
         );
         return res.json({ ...updated, warning: "Status updated, but email notification failed" });
@@ -105,5 +101,6 @@ export async function patchRequestStatus(req, res, next) {
   }
 }
 
-// Backward-compatible naming alias
-export const updateStatus = patchRequestStatus;
+// Backward-compatible naming aliases
+export const submitRequest = createRequest;
+export const patchRequestStatus = updateStatus;
